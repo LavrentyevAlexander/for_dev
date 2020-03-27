@@ -1,0 +1,43 @@
+---
+- name: Installing letsencrypt
+  apt: name=letsencrypt state=present
+
+- name: Creating virtual host http {{vhost_name}} for nginx
+  template: 
+      src=virt_host.http.conf.j2 
+      dest=/etc/nginx/sites-enabled/{{vhost_name}}.conf 
+      owner=root 
+      group=root 
+      mode=0644
+  notify: restarting nginx
+
+- name: Restart nginx
+  service:
+    name: nginx
+    state: reloaded  
+
+- name: Adding folder for SSL
+  file: path=/opt/acme state=directory
+  
+- name: Receive SSL certificate
+  shell: letsencrypt certonly -n --agree-tos --webroot -w /opt/acme -d lavrentyevas.devops.rebrain.srwx.net -m lavrentyevas@mail.ru
+  args:
+    creates: /etc/letsencrypt/live/lavrentyevas.devops.rebrain.srwx.net/
+
+- name: Creating virtual host https {{vhost_name}} for nginx
+  template: 
+      src=virt_host.https.conf.j2 
+      dest=/etc/nginx/sites-enabled/{{vhost_name}}.conf 
+      owner=root 
+      group=root 
+      mode=0644
+  notify: restarting nginx
+
+- name: Creating certificate renewal
+  cron:
+    name: letsencrypt certificate renew
+    job: "letsencrypt renew && service nginx reload"
+    state: present
+    user: root
+    hour: "*/12"
+  tags: renew   
